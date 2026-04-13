@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RGB LED Cube — Interactive Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f9f8f6; color: #1a1a1a; min-height: 100vh; }
+    .page { max-width: 720px; margin: 0 auto; padding: 2.5rem 1.5rem; }
+    h1 { font-size: 22px; font-weight: 500; margin-bottom: 0.25rem; }
+    .subtitle { font-size: 14px; color: #666; margin-bottom: 2rem; }
+    .cube-area { display: flex; justify-content: center; align-items: center; margin: 1.5rem 0; min-height: 320px; background: #1a1d2e; border: 0.5px solid #111; border-radius: 12px; }
+    .controls { display: flex; flex-direction: column; gap: 1.25rem; background: #fff; border: 0.5px solid #e0ddd6; border-radius: 12px; padding: 1.5rem; }
+    .section-label { font-size: 12px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    .mode-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    .mode-btn { padding: 8px 20px; border: 0.5px solid #d0cdc6; border-radius: 8px; background: #fff; color: #1a1a1a; font-size: 14px; cursor: pointer; transition: background 0.15s; font-family: inherit; }
+    .mode-btn.active { background: #f0ede8; border-color: #aaa; font-weight: 500; }
+    .mode-btn:hover { background: #f5f3f0; }
+    .slider-row { display: flex; align-items: center; gap: 12px; }
+    .slider-row label { font-size: 13px; color: #555; min-width: 120px; }
+    .slider-row input[type=range] { flex: 1; accent-color: #555; }
+    .slider-row span { font-size: 13px; font-weight: 500; min-width: 40px; text-align: right; }
+    .oled { background: #111; border-radius: 5px; padding: 7px 14px; display: inline-flex; align-items: center; gap: 8px; }
+    .oled-text { color: #7ef; font-size: 12px; font-family: monospace; letter-spacing: 1px; }
+    .oled-dot { width: 6px; height: 6px; border-radius: 50%; background: #7ef; flex-shrink: 0; }
+    .touch-row { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+    .touch-btn { padding: 7px 18px; border: 0.5px solid #d0cdc6; border-radius: 8px; background: #fff; font-size: 13px; color: #555; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+    .touch-btn:active { background: #f0ede8; transform: scale(0.97); }
+    .touch-label { font-size: 12px; color: #999; }
+    .clap-btn { padding: 8px 20px; border: 0.5px solid #d0cdc6; border-radius: 8px; background: #fff; font-size: 13px; cursor: pointer; transition: all 0.15s; font-family: inherit; color: #1a1a1a; }
+    .clap-btn:hover { background: #f5f3f0; }
+    .clap-btn:active { transform: scale(0.97); }
+    .pattern-label { font-size: 13px; color: #555; margin-top: 6px; min-height: 20px; }
+    .ambient-status { font-size: 13px; color: #555; margin-top: 6px; min-height: 20px; }
+    .front-panel { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.25rem; }
+    .divider { border: none; border-top: 0.5px solid #e8e5e0; margin: 0; }
+    footer { margin-top: 2rem; font-size: 12px; color: #aaa; text-align: center; }
+  </style>
+</head>
+<body>
+<div class="page">
+  <h1>RGB LED Cube</h1>
+  <p class="subtitle">Circuits &amp; Systems Design — Interactive Demo</p>
+
+  <div class="front-panel">
+    <div class="oled">
+      <div class="oled-dot"></div>
+      <span class="oled-text" id="oled-text">MODE: DEFAULT</span>
+    </div>
+    <div class="touch-row">
+      <button class="touch-btn" onclick="nextMode()">Touch sensor</button>
+      <span class="touch-label">tap to cycle mode</span>
+    </div>
+  </div>
+
+  <div class="cube-area">
+    <svg id="cube-svg" viewBox="0 0 420 320" width="420" height="320" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+
+  <div class="controls">
+    <div>
+      <div class="section-label">Mode</div>
+      <div class="mode-btns">
+        <button class="mode-btn active" onclick="setMode('default')">Default</button>
+        <button class="mode-btn" onclick="setMode('ambient')">Ambient</button>
+        <button class="mode-btn" onclick="setMode('party')">Party</button>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div id="ctrl-default">
+      <div class="section-label">Rotary encoder — brightness</div>
+      <div class="slider-row">
+        <label>Intensity</label>
+        <input type="range" min="5" max="100" value="80" step="1" id="brightness-slider" oninput="setBrightness(this.value)">
+        <span id="brightness-val">80%</span>
+      </div>
+    </div>
+
+    <div id="ctrl-ambient" style="display:none;">
+      <div class="section-label">LDR — ambient light level</div>
+      <div class="slider-row">
+        <label>Room brightness</label>
+        <input type="range" min="0" max="100" value="10" step="1" id="ldr-slider" oninput="setLDR(this.value)">
+        <span id="ldr-val">10%</span>
+      </div>
+      <div class="ambient-status" id="ambient-status">Room is dark — lamp fully on</div>
+    </div>
+
+    <div id="ctrl-party" style="display:none;">
+      <div class="section-label">Rotary encoder — brightness</div>
+      <div class="slider-row">
+        <label>Intensity</label>
+        <input type="range" min="5" max="100" value="80" step="1" id="party-brightness-slider" oninput="setPartyBrightness(this.value)">
+        <span id="party-brightness-val">80%</span>
+      </div>
+      <hr class="divider" style="margin: 0.75rem 0;">
+      <div class="section-label">Microphone — clap to change pattern</div>
+      <div class="pattern-label" id="pattern-name">Pattern: all red</div>
+      <div style="margin-top:10px;">
+        <button class="clap-btn" onclick="nextPattern()">Clap / next pattern</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>Built with HTML, CSS &amp; JavaScript &mdash; RGB LED Cube Project</footer>
+</div>
+
+<script>
+const svg = document.getElementById('cube-svg');
+const cx = 210, cy = 155;
+const iso = (x,y,z) => ({ px: cx + (x-y)*38, py: cy + (x+y)*19 - z*38 });
+
+const outerPositions = [
+  {x:0,y:0},{x:1,y:0},{x:0,y:1},{x:1,y:1},
+  {x:0,y:0},{x:1,y:0},{x:0,y:1},{x:1,y:1}
+];
+const outerZ = [0,0,0,0,1,1,1,1];
+const innerPositions = [
+  {x:0.3,y:0.3},{x:0.7,y:0.3},{x:0.3,y:0.7},{x:0.7,y:0.7},
+  {x:0.3,y:0.3},{x:0.7,y:0.3},{x:0.3,y:0.7},{x:0.7,y:0.7}
+];
+const innerZ = [0.2,0.2,0.2,0.2,0.8,0.8,0.8,0.8];
+
+let ledColors = Array(16).fill({r:255,g:255,b:255});
+let ledAlpha = Array(16).fill(1);
+let mode = 'default';
+let brightness = 0.8;
+let partyPattern = 0;
+let rippleInterval = null;
+
+const patterns = [
+  { name: 'all red',            fn: () => { stopRipple(); setAll(255,0,0,brightness); } },
+  { name: 'all green',          fn: () => { stopRipple(); setAll(0,200,0,brightness); } },
+  { name: 'all blue',           fn: () => { stopRipple(); setAll(30,80,255,brightness); } },
+  { name: 'outer cube — white', fn: () => { stopRipple(); setOuter(255,255,255,brightness); setInner(0,0,0,0); } },
+  { name: 'inner cube — white', fn: () => { stopRipple(); setInner(255,255,255,brightness); setOuter(0,0,0,0); } },
+  { name: 'ripple effect',      fn: () => { startRipple(); } },
+  { name: 'all white',          fn: () => { stopRipple(); setAll(255,255,255,brightness); } },
+];
+
+function setAll(r,g,b,a) {
+  ledColors = Array(16).fill({r,g,b});
+  ledAlpha = Array(16).fill(a);
+  renderLEDs();
+}
+function setOuter(r,g,b,a) {
+  for(let i=0;i<8;i++){ ledColors[i]={r,g,b}; ledAlpha[i]=a; }
+  renderLEDs();
+}
+function setInner(r,g,b,a) {
+  for(let i=8;i<16;i++){ ledColors[i]={r,g,b}; ledAlpha[i]=a; }
+  renderLEDs();
+}
+
+function startRipple() {
+  let t = 0;
+  if(rippleInterval) clearInterval(rippleInterval);
+  rippleInterval = setInterval(() => {
+    if(mode !== 'party') { clearInterval(rippleInterval); rippleInterval = null; return; }
+    for(let i=0;i<16;i++) {
+      const phase = (i/16)*Math.PI*2;
+      const wave = (Math.sin(t*0.12+phase)+1)/2;
+      ledColors[i] = {
+        r: Math.round(wave*200+55),
+        g: Math.round(Math.sin(t*0.08+phase+2)*80+120),
+        b: Math.round((1-wave)*200+55)
+      };
+      ledAlpha[i] = brightness * (0.4 + wave*0.6);
+    }
+    t++;
+    renderLEDs();
+  }, 60);
+}
+
+function stopRipple() {
+  if(rippleInterval) { clearInterval(rippleInterval); rippleInterval = null; }
+}
+
+function buildScene() {
+  svg.innerHTML = '';
+  drawCubeFrame();
+  drawLEDSpheres();
+}
+
+function drawCubeFrame() {
+  const verts = [
+    iso(0,0,0),iso(2,0,0),iso(2,2,0),iso(0,2,0),
+    iso(0,0,2),iso(2,0,2),iso(2,2,2),iso(0,2,2)
+  ];
+  const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+  edges.forEach(([a,b]) => {
+    const l = document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1',verts[a].px); l.setAttribute('y1',verts[a].py);
+    l.setAttribute('x2',verts[b].px); l.setAttribute('y2',verts[b].py);
+    l.setAttribute('stroke','#3a3f5c'); l.setAttribute('stroke-width','1.5');
+    l.setAttribute('stroke-linecap','round');
+    svg.appendChild(l);
+  });
+}
+
+function drawLEDSpheres() {
+  const allLEDs = [];
+  for(let i=0;i<8;i++) {
+    const p = outerPositions[i];
+    allLEDs.push({ pos: iso(p.x*2, p.y*2, outerZ[i]*2), idx: i, r: 14 });
+  }
+  for(let i=0;i<8;i++) {
+    const p = innerPositions[i];
+    allLEDs.push({ pos: iso(p.x*2, p.y*2, innerZ[i]*2), idx: i+8, r: 10 });
+  }
+  allLEDs.sort((a,b) => a.pos.py - b.pos.py);
+  allLEDs.forEach(({pos, idx, r}) => {
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('data-led', idx);
+    const base = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    base.setAttribute('cx',pos.px); base.setAttribute('cy',pos.py);
+    base.setAttribute('r',r); base.setAttribute('fill','#444');
+    g.appendChild(base);
+    const glow = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    glow.setAttribute('cx',pos.px); glow.setAttribute('cy',pos.py);
+    glow.setAttribute('r',r); glow.setAttribute('class','led-glow');
+    g.appendChild(glow);
+    svg.appendChild(g);
+  });
+}
+
+function renderLEDs() {
+  svg.querySelectorAll('.led-glow').forEach(el => {
+    const idx = parseInt(el.parentElement.getAttribute('data-led'));
+    const c = ledColors[idx];
+    const a = ledAlpha[idx];
+    el.setAttribute('fill', `rgba(${c.r},${c.g},${c.b},${a})`);
+  });
+}
+
+function setMode(m) {
+  mode = m;
+  stopRipple();
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase() === m);
+  });
+  document.getElementById('ctrl-default').style.display = m === 'default' ? '' : 'none';
+  document.getElementById('ctrl-ambient').style.display = m === 'ambient' ? '' : 'none';
+  document.getElementById('ctrl-party').style.display = m === 'party' ? '' : 'none';
+  const labels = { default: 'MODE: DEFAULT', ambient: 'MODE: AMBIENT', party: 'MODE: PARTY' };
+  document.getElementById('oled-text').textContent = labels[m];
+  if(m === 'default') setAll(255,255,255,brightness);
+  if(m === 'ambient') setLDR(parseInt(document.getElementById('ldr-slider').value));
+  if(m === 'party') { partyPattern = 0; runPattern(); }
+}
+
+function nextMode() {
+  const modes = ['default','ambient','party'];
+  setMode(modes[(modes.indexOf(mode)+1) % 3]);
+}
+
+function setBrightness(v) {
+  brightness = v / 100;
+  document.getElementById('brightness-val').textContent = v + '%';
+  if(mode === 'default') setAll(255,255,255,brightness);
+}
+
+function setPartyBrightness(v) {
+  brightness = v / 100;
+  document.getElementById('party-brightness-val').textContent = v + '%';
+  if(mode === 'party' && patterns[partyPattern % patterns.length].name !== 'ripple effect') {
+    runPattern();
+  }
+}
+
+function setLDR(v) {
+  v = parseInt(v);
+  document.getElementById('ldr-val').textContent = v + '%';
+  const b = Math.max(0, 1 - v/80);
+  let status = '';
+  if(v < 20) status = 'Room is dark — lamp fully on';
+  else if(v < 60) status = 'Some ambient light — lamp dimming';
+  else if(v < 80) status = 'Bright room — lamp nearly off';
+  else status = 'Room fully lit — lamp off';
+  document.getElementById('ambient-status').textContent = status;
+  setAll(255,255,255, Math.round(b*100)/100);
+}
+
+function runPattern() {
+  stopRipple();
+  const p = patterns[partyPattern % patterns.length];
+  document.getElementById('pattern-name').textContent = 'Pattern: ' + p.name;
+  p.fn();
+}
+
+function nextPattern() {
+  partyPattern = (partyPattern + 1) % patterns.length;
+  runPattern();
+}
+
+buildScene();
+setAll(255,255,255,0.8);
+</script>
+</body>
+</html>
